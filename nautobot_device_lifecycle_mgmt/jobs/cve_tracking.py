@@ -127,8 +127,12 @@ class NistCveSyncSoftware(Job):
     def prep_cve_for_dlc(self, url):
         cve_search_url = f"{url}"
         result = json.loads(requests.get(cve_search_url).text)
-        cve_base = result['result']['CVE_Items'][0]
+        
+        if result.get('message'):
+            self.log_info(message=f"CVE {url.split('/')[-1]} DOES NOT EXIST IN NIST DATABASE")
+            return
 
+        cve_base = result['result']['CVE_Items'][0]
         cve_description = cve_base['cve']['description']['description_data'][0]['value']
         cve_published_date = cve_base.get('publishedDate')
         cve_modified_date = cve_base.get('lastModifiedDate')
@@ -151,8 +155,8 @@ class NistCveSyncSoftware(Job):
             cvssv3_score = None
 
         all_cve_info = {
-            'url': cve_url, 
-            'description': cve_description, 
+            'url': cve_url,
+            'description': cve_description,
             'published_date': cve_published_date,
             'modified_date': cve_modified_date,
             'cvss_base_score': cvss_base_score,
@@ -230,23 +234,29 @@ class NistCveSyncSoftware(Job):
         dlc_cves = CVELCM.objects.all()
 
         for cve in dlc_cves:
-            result = self.prep_cve_for_dlc(base_url+cve.name)
-            if str(result.get('modified_date')[0:10]) != str(cve.last_modified_date):
-                cve.description = (f"{result['description'][0:251]}..." if len(result['description']) > 255 else result['description'])
-                cve.last_modified_date=f"{result.get('modified_date')[0:10]}"
-                cve.link = result['url']
-                cve.cvss = result['cvss_base_score']
-                cve.severity = result['cvss_severity']
-                cve.cvss_v2 = result['cvssv2_score']
-                cve.cvss_v3 = result['cvssv3_score']
-                cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
+            try:
+                result = self.prep_cve_for_dlc(base_url+cve.name)
 
-                try:    
-                    cve.validated_save()
-                    self.log_debug(message=f"{cve.name} was modified.")
+                if str(result.get('modified_date')[0:10]) != str(cve.last_modified_date):
+                    cve.description = (f"{result['description'][0:251]}..." if len(result['description']) > 255 else result['description'])
+                    cve.last_modified_date=f"{result.get('modified_date')[0:10]}"
+                    cve.link = result['url']
+                    cve.cvss = result['cvss_base_score']
+                    cve.severity = result['cvss_severity']
+                    cve.cvss_v2 = result['cvssv2_score']
+                    cve.cvss_v3 = result['cvssv3_score']
+                    cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
 
-                except:
-                    self.log_info(message=f"Unable to update {cve.name}.")
+                    try:    
+                        cve.validated_save()
+                        self.log_debug(message=f"{cve.name} was modified.")
+
+                    except:
+                        self.log_info(message=f"Unable to update {cve.name}.")
+                        pass
+
+            except AttributeError:
+                pass
 
         self.log_success(message=f"All CVE's requiring modifications have been updated.")
 
