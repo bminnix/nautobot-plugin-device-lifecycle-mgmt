@@ -99,7 +99,8 @@ class NistCveSyncSoftware(Job):
         update_counter = 0
         for software in all_software:
             manufacturer = str(software.device_platform.manufacturer).lower()
-            platform = str(software.device_platform.name).split(" ")[1]
+            platform = str(software.device_platform.name).split(" ",1)[1].lower()
+            platform = platform.replace(" ","_")
             version = str(software.version)
 
             cpe_software_search_url = self.create_cpe_software_search_url(manufacturer, platform, version)
