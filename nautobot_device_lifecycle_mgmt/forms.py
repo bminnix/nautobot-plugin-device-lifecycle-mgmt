@@ -985,7 +985,7 @@ class CVELCMForm(
     """CVE Lifecycle Management creation/edit form."""
 
     published_date = forms.DateField(widget=DatePicker())
-    last_modified_date = forms.DateField(widget=DatePicker())
+    last_modified_date = forms.DateField(widget=DatePicker(), required=False)
     severity = forms.ChoiceField(choices=CVESeverityChoices.CHOICES, label="Severity", required=False)
     tags = DynamicModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
 
