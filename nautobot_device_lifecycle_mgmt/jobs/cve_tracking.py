@@ -76,10 +76,12 @@ class GenerateVulnerabilities(Job):
 
 
 class NistCveSyncSoftware(Job):
-    """Checks all software in the DLC Plugin for NIST recorded vulnerabilities
+    """Checks all software in the DLC Plugin for \
+    NIST recorded vulnerabilities
     """
     name = "Find current NIST CVE for Software in Database"
-    description = "Searches the NIST DBs for CVEs related to software"
+    description = """Searches the NIST DBs for CVEs \
+    related to software"""
     read_only = False
 
     class Meta:  # pylint: disable=too-few-public-methods
@@ -88,8 +90,8 @@ class NistCveSyncSoftware(Job):
         commit_default = True
 
     def run(self, data, commit):
-        """Check if software assigned to each device is valid. If no software 
-        is assigned return warning message.
+        """Check all software in DLC against NIST database and \
+        associate registered CVEs.  Update when necessary.
         """
         all_software = SoftwareLCM.objects.all()
         job_run_time = datetime.now()
@@ -98,24 +100,45 @@ class NistCveSyncSoftware(Job):
         cve_counter = 0
         update_counter = 0
         for software in all_software:
-            manufacturer = str(software.device_platform.manufacturer).lower()
-            platform = str(software.device_platform.name).split(" ",1)[1].lower()
+            manufacturer = \
+                str(software.device_platform.manufacturer).lower()
+            platform = \
+                str(software.device_platform.name).split(" ",1)[1].lower()
             platform = platform.replace(" ","_")
             version = str(software.version)
 
-            cpe_software_search_url = self.create_cpe_software_search_url(manufacturer, platform, version)
-            software_cve_info = self.get_cve_info(cpe_software_search_url, software.id)
+            cpe_software_search_url = self.create_cpe_software_search_url(
+                manufacturer, 
+                platform, 
+                version
+                )
+
+            software_cve_info = self.get_cve_info(
+                cpe_software_search_url, 
+                software.id
+                )
+
             cve_counter += len(software_cve_info)
-            create_new_cves = self.create_dlc_cves(software.id, software_cve_info)
+            create_new_cves = self.create_dlc_cves(
+                software.id, 
+                software_cve_info
+                )
         
-        self.log_success(message=f"Performed discovery on all software meeting naming standards.  Added {cve_counter} CVE.")
+        self.log_success(
+            message=f"""Performed discovery on all software meeting  \
+                naming standards.  Added {cve_counter} CVE."""
+            )
         self.update_cves()
 
 
-    def create_cpe_software_search_url(self, manufacturer: str, platform: str, version: str) -> str:
-        """Convert the data into the url for a cpe search against the NIST DB"""
+    def create_cpe_software_search_url(
+        self, manufacturer: str, platform: str, version: str
+        ) -> str:
+        """Convert the data into the url for a cpe search against the \
+        NIST DB"""
         escape_list = [r"\(", r"\)"]
-        base_url = f"https://services.nvd.nist.gov/rest/json/cpes/1.0?addOns=cves&cpeMatchString=cpe:2.3:*:"
+        base_url = f"""https://services.nvd.nist.gov/rest/json/cpes/1.0?\
+            addOns=cves&cpeMatchString=cpe:2.3:*:"""
         version = version
 
         for escape_char in escape_list:
@@ -126,22 +149,34 @@ class NistCveSyncSoftware(Job):
         return f"{base_url}{extended_url}"
 
     def prep_cve_for_dlc(self, url):
+        cve_name = url.split('/')[-1]
         cve_search_url = f"{url}"
         result = json.loads(requests.get(cve_search_url).text)
         
         if result.get('message'):
-            self.log_info(message=f"CVE {url.split('/')[-1]} DOES NOT EXIST IN NIST DATABASE")
+            self.log_info(
+                message=f"CVE {cve_name} DOES NOT EXIST IN NIST DATABASE"
+                )
             return
 
         cve_base = result['result']['CVE_Items'][0]
-        cve_description = cve_base['cve']['description']['description_data'][0]['value']
+        cve_description = cve_base['cve']['description']['description_data']\
+            [0]['value']
         cve_published_date = cve_base.get('publishedDate')
         cve_modified_date = cve_base.get('lastModifiedDate')
-        if len(result['result']['CVE_Items'][0]['cve']['references']['reference_data']) > 0:
-            cve_url = result['result']['CVE_Items'][0]['cve']['references']['reference_data'][0].get('url', "http://no-url-provided.com")
-        else:
-            cve_url = "http://no-url-provided.com"
         cve_impact = cve_base.get('impact')
+
+        ## Determine URL
+        if len(result['result']['CVE_Items'][0]['cve']['references']\
+            ['reference_data']) > 0:
+            cve_url = result['result']['CVE_Items'][0]['cve']['references']\
+                ['reference_data'][0].get(
+                'url', 
+                f"https://www.cvedetails.com/cve/{cve_name}/"
+                )
+        else:
+            cve_url = f"https://www.cvedetails.com/cve/{cve_name}/"
+        
 
 
         if cve_impact.get('baseMetricV3'):
@@ -198,7 +233,10 @@ class NistCveSyncSoftware(Job):
                 self.log_info(message=f"{cve}")
                 create_cves = CVELCM.objects.get_or_create(
                     name=cve, 
-                    description=(f"{info['description'][0:251]}..." if len(info['description']) > 255 else info['description']),
+                    description=(
+                        f"{info['description'][0:251]}..." \
+                            if len(info['description']) > \
+                                255 else info['description']),
                     published_date=dateutil.parser.parse(info['published_date']),
                     last_modified_date=dateutil.parser.parse(info['modified_date']),
                     link=info['url'],
@@ -238,26 +276,38 @@ class NistCveSyncSoftware(Job):
             try:
                 result = self.prep_cve_for_dlc(base_url+cve.name)
 
-                if str(result.get('modified_date')[0:10]) != str(cve.last_modified_date):
-                    cve.description = (f"{result['description'][0:251]}..." if len(result['description']) > 255 else result['description'])
-                    cve.last_modified_date=f"{result.get('modified_date')[0:10]}"
-                    cve.link = result['url']
-                    cve.cvss = result['cvss_base_score']
-                    cve.severity = result['cvss_severity']
-                    cve.cvss_v2 = result['cvssv2_score']
-                    cve.cvss_v3 = result['cvssv3_score']
-                    cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
+                if str(result.get('modified_date')[0:10]) \
+                    != str(cve.last_modified_date):
+                        cve.description = (f"{result['description'][0:251]}..." \
+                            if len(result['description']) > \
+                                255 else result['description'])
+                        cve.last_modified_date=\
+                            f"{result.get('modified_date')[0:10]}"
+                        cve.link = result['url']
+                        cve.cvss = result['cvss_base_score']
+                        cve.severity = result['cvss_severity']
+                        cve.cvss_v2 = result['cvssv2_score']
+                        cve.cvss_v3 = result['cvssv3_score']
+                        cve.comments = "ENTRY UPDATED BY NAUTOBOT NIST JOB"
 
-                    try:    
-                        cve.validated_save()
-                        self.log_debug(message=f"{cve.name} was modified.")
+                        try:    
+                            cve.validated_save()
+                            self.log_debug(
+                                message=f"{cve.name} was modified."
+                                )
 
-                    except:
-                        self.log_info(message=f"Unable to update {cve.name}.")
-                        pass
+                        except:
+                            self.log_info(
+                                message=f"Unable to update {cve.name}."
+                                )
+                            pass
 
             except AttributeError:
                 pass
+            except JSONDecodeError:
+                pass
 
-        self.log_success(message=f"All CVE's requiring modifications have been updated.")
+        self.log_success(
+            message=f"All CVE's requiring modifications have been updated."
+            )
 
