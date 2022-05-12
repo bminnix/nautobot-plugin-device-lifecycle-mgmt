@@ -81,7 +81,7 @@ class NistCveSyncSoftware(Job):
     """
     name = "Find current NIST CVE for Software in Database"
     description = """Searches the NIST DBs for CVEs \
-    related to software"""
+        related to software"""
     read_only = False
 
     class Meta:  # pylint: disable=too-few-public-methods
@@ -100,10 +100,8 @@ class NistCveSyncSoftware(Job):
         cve_counter = 0
         update_counter = 0
         for software in all_software:
-            manufacturer = \
-                str(software.device_platform.manufacturer).lower()
-            platform = \
-                str(software.device_platform.name).split(" ",1)[1].lower()
+            manufacturer = str(software.device_platform.manufacturer).lower()
+            platform = str(software.device_platform.name).split(" ",1)[1].lower()
             platform = platform.replace(" ","_")
             version = str(software.version)
 
@@ -137,8 +135,7 @@ class NistCveSyncSoftware(Job):
         """Convert the data into the url for a cpe search against the \
         NIST DB"""
         escape_list = [r"\(", r"\)"]
-        base_url = f"""https://services.nvd.nist.gov/rest/json/cpes/1.0?\
-            addOns=cves&cpeMatchString=cpe:2.3:*:"""
+        base_url = f"""https://services.nvd.nist.gov/rest/json/cpes/1.0?addOns=cves&cpeMatchString=cpe:2.3:*:"""
         version = version
 
         for escape_char in escape_list:
@@ -155,7 +152,7 @@ class NistCveSyncSoftware(Job):
         
         if result.get('message'):
             self.log_info(
-                message=f"CVE {cve_name} DOES NOT EXIST IN NIST DATABASE"
+                message=f"""CVE {cve_name} DOES NOT EXIST IN NIST DATABASE"""
                 )
             return
 
@@ -230,7 +227,6 @@ class NistCveSyncSoftware(Job):
         dlc_cves = CVELCM.objects.all()
         for cve, info in cpe_cves.items():
             if cve not in dlc_cves:
-                self.log_info(message=f"{cve}")
                 create_cves = CVELCM.objects.get_or_create(
                     name=cve, 
                     description=(
@@ -247,7 +243,7 @@ class NistCveSyncSoftware(Job):
                     comments="ENTRY CREATED BY NAUTOBOT NIST JOB"
                     )
 
-                self.log_debug(message=f"Created {cve}")
+                self.log_info(message=f"""Created {cve}""")
                 cve = CVELCM.objects.get(name=cve)
 
                 self.associate_software_to_cve(software_id, cve.id)
@@ -268,7 +264,7 @@ class NistCveSyncSoftware(Job):
         
     def update_cves(self):
         """A method to ensure the CVE in DLC is the latest version"""
-        self.log_debug(message=f"Checking for CVE Modifications")
+        self.log_info(message=f"""Checking for CVE Modifications""")
         base_url = "https://services.nvd.nist.gov/rest/json/cve/1.0/"
         dlc_cves = CVELCM.objects.all()
 
@@ -292,13 +288,13 @@ class NistCveSyncSoftware(Job):
 
                         try:    
                             cve.validated_save()
-                            self.log_debug(
-                                message=f"{cve.name} was modified."
+                            self.log_info(
+                                message=f"""{cve.name} was modified."""
                                 )
 
                         except:
                             self.log_info(
-                                message=f"Unable to update {cve.name}."
+                                message=f"""Unable to update {cve.name}."""
                                 )
                             pass
 
@@ -308,6 +304,6 @@ class NistCveSyncSoftware(Job):
                 pass
 
         self.log_success(
-            message=f"All CVE's requiring modifications have been updated."
+            message=f"""All CVE's requiring modifications have been updated."""
             )
 

@@ -338,6 +338,7 @@ class CVELCMFormTest(TestCase):
             data={
                 "name": "CVE-2021-34699",
                 "published_date": "2021-09-23",
+                "last_modified_date": "2022-04-23",
                 "link": "https://www.cvedetails.com/cve/CVE-2021-34699/",
                 "status": self.status,
                 "description": "Thanos",
@@ -358,6 +359,7 @@ class CVELCMFormTest(TestCase):
         self.assertDictEqual(
             {
                 "published_date": ["This field is required."],
+                "last_modified_date": ["This field is required."],
                 "link": ["This field is required."],
             },
             form.errors,
