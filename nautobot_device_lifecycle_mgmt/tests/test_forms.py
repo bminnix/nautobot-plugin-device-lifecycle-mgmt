@@ -359,7 +359,6 @@ class CVELCMFormTest(TestCase):
         self.assertDictEqual(
             {
                 "published_date": ["This field is required."],
-                "last_modified_date": ["This field is required."],
                 "link": ["This field is required."],
             },
             form.errors,
